@@ -92,6 +92,36 @@ def db_path():
 
 # ROTAS:
 
+# POST - Dar Like em Pergunta
+@app.route('/questions/<int:question_id>/like', methods=['POST'])
+@jwt_required()
+def like_question(question_id):
+    current_user_id = get_jwt_identity()
+    existing_like = UserQuestionLike.query.filter_by(user_id=current_user_id, question_id=question_id).first()
+    if existing_like:
+        return jsonify({"message": "Already liked/disliked"}), 409
+    new_like = UserQuestionLike(user_id=current_user_id, question_id=question_id, like=True)
+    db.session.add(new_like)
+    question = Question.query.get_or_404(question_id)
+    question.likes += 1
+    db.session.commit()
+    return jsonify({"message": "Liked question successfully"})
+
+# POST - Dar Dislike em Pergunta
+@app.route('/questions/<int:question_id>/dislike', methods=['POST'])
+@jwt_required()
+def dislike_question(question_id):
+    current_user_id = get_jwt_identity()
+    existing_like = UserQuestionLike.query.filter_by(user_id=current_user_id, question_id=question_id).first()
+    if existing_like:
+        return jsonify({"message": "Already liked/disliked"}), 409
+    new_like = UserQuestionLike(user_id=current_user_id, question_id=question_id, like=False)
+    db.session.add(new_like)
+    question = Question.query.get_or_404(question_id)
+    question.dislikes += 1
+    db.session.commit()
+    return jsonify({"message": "Disliked question successfully"})
+
 # GET - Listar Comentários de uma Pergunta
 @app.route('/questions/<int:question_id>/comments', methods=['GET'])
 def get_comments(question_id):
