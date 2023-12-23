@@ -38,15 +38,6 @@ def db_path():
     else:
         return "O banco de dados não está usando SQLite."
 
-
-
-# MAIN PARA EXECUTAR O APP EM PYTHON
-if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-    app.run(debug=True)
-
-
 # ROTAS:
 @app.route('/questions/<int:question_id>/comments', methods=['GET'])
 def get_comments(question_id):
@@ -76,3 +67,9 @@ def dislike_comment(comment_id):
     db.session.commit()
     return jsonify({"message": "Disliked comment successfully"})
     
+# MAIN PARA EXECUTAR O APP EM PYTHON
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
+   
