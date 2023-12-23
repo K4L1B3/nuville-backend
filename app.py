@@ -26,7 +26,59 @@ ns = api.namespace('main', description='Operações principais')
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
+# Modelos
+#classe das questões
+class Question(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(500), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    likes = db.Column(db.Integer, default=0)
+    dislikes = db.Column(db.Integer, default=0)
+    comments = db.relationship('Comment', backref='question', lazy=True)
+    author = db.relationship('User', backref='questions', lazy=True)
 
+
+class Comment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.String(500), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    likes = db.Column(db.Integer, default=0)
+    dislikes = db.Column(db.Integer, default=0)
+    author = db.relationship('User', backref='comments', lazy=True)  # Adicionado
+
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(100), unique=True, nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    password_hash = db.Column(db.String(128))
+    age = db.Column(db.Integer)
+    profile_picture = db.Column(db.String(255)) # URL da imagem de perfil
+    bookmarks = db.relationship('Bookmark', backref='user', lazy=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+class UserQuestionLike(db.Model):
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('question.id'), primary_key=True)
+    like = db.Column(db.Boolean)  # True para like, False para dislike
+
+class UserCommentLike(db.Model):
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), primary_key=True)
+    comment_id = db.Column(db.Integer, db.ForeignKey('comment.id'), primary_key=True)
+    like = db.Column(db.Boolean)  # True para like, False para dislike
+
+class Bookmark(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
+    
 import os
 
 @app.route('/dbpath')
