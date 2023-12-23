@@ -1,20 +1,13 @@
-# Base Image
-FROM python:3.9-slim
+# Use a imagem oficial do Python 3.10.13
+FROM python:3.10.13
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+WORKDIR /python-docker
 
-# Set work directory
-WORKDIR /code
+COPY requirements.txt requirements.txt
+RUN pip3 install -r requirements.txt
 
-# Install dependencies
-COPY requirements.txt /code/
-RUN pip install --upgrade pip
-RUN pip install -r requirements.txt
+COPY . .
 
-# Copy project
-COPY . /code/
+EXPOSE 5000
 
-# Run the application
-CMD ["python", "app.py"]
+CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0"]
