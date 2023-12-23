@@ -26,8 +26,9 @@ ns = api.namespace('main', description='Operações principais')
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
+
+
 # Modelos
-#classe das questões
 class Question(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
@@ -78,19 +79,83 @@ class Bookmark(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     question_id = db.Column(db.Integer, db.ForeignKey('question.id'), nullable=False)
-    
-import os
 
-@app.route('/dbpath')
-def db_path():
-    db_uri = app.config['SQLALCHEMY_DATABASE_URI']
-    if db_uri.startswith('sqlite:///'):
-        db_path = db_uri.split('sqlite:///')[-1]
-        return os.path.abspath(db_path)
-    else:
-        return "O banco de dados não está usando SQLite."
+# ------------------ QUESTIONS ------------------
+# GET - Listar Todas as Perguntas
+@app.route('/questions', methods=['GET'])
+def get_questions():
+    questions = Question.query.order_by((Question.likes - Question.dislikes).desc()).all()
+    questions_data = [
+        {
+            'title': q.title,
+            'description': q.description,
+            'author_name': q.author.name,
+            'author_profile_picture': q.author.profile_picture
+        }
+        for q in questions
+    ]
+    return jsonify(questions_data)
 
-# ROTAS:
+# GET - Buscar Perguntas por Título
+@app.route('/questions/search', methods=['GET'])
+def search_questions():
+    title_query = request.args.get('title', '')
+    questions = Question.query.filter(Question.title.like(f'%{title_query}%')).order_by((Question.likes - Question.dislikes).desc()).all()
+    questions_data = [
+        {
+            'id': q.id,
+            'title': q.title,
+            'description': q.description,
+            'author_name': q.author.name,
+            'author_profile_picture': q.author.profile_picture
+        }
+        for q in questions
+    ]
+    return jsonify(questions_data)
+
+# POST - Adicionar Pergunta
+@app.route('/questions', methods=['POST'])
+@jwt_required()
+def add_question():
+    question_data = request.json
+    user_id = get_jwt_identity()
+    new_question = Question(title=question_data['title'], description=question_data['description'], user_id=user_id)
+    db.session.add(new_question)
+    db.session.commit()
+    return jsonify({"message": "Question added successfully"})
+
+# PUT - Atualizar Pergunta
+@app.route('/questions/<int:question_id>', methods=['PUT'])
+@jwt_required()
+def update_question(question_id):
+    current_user_id = get_jwt_identity()
+    question = Question.query.get(question_id)
+    if not question or question.user_id != current_user_id:
+        return jsonify({"message": "Question not found or unauthorized"}), 404
+    data = request.json
+    question.title = data.get('title', question.title)
+    question.description = data.get('description', question.description)
+    db.session.commit()
+    return jsonify({"message": "Question updated successfully"})
+
+# DELETE - Deletar Pergunta
+@app.route('/questions/<int:question_id>', methods=['DELETE'])
+@jwt_required()
+def delete_question(question_id):
+    current_user_id = get_jwt_identity()
+    question = Question.query.get(question_id)
+
+    if not question:
+        return jsonify({"message": "Question not found"}), 404
+
+    # Verifica se o usuário atual é o autor da pergunta
+    if question.user_id != current_user_id:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    db.session.delete(question)
+    db.session.commit()
+    return jsonify({"message": "Question deleted successfully"}), 200
+
 
 # POST - Dar Like em Pergunta
 @app.route('/questions/<int:question_id>/like', methods=['POST'])
@@ -120,8 +185,9 @@ def dislike_question(question_id):
     question = Question.query.get_or_404(question_id)
     question.dislikes += 1
     db.session.commit()
-    return jsonify({"message": "Disliked question successfully"})
+    return jsonify({"message": "Disliked question successfully"})
 
+# ------------------ COMMENTS ------------------
 # GET - Listar Comentários de uma Pergunta
 @app.route('/questions/<int:question_id>/comments', methods=['GET'])
 def get_comments(question_id):
@@ -178,6 +244,7 @@ def delete_comment(comment_id):
     db.session.commit()
     return jsonify({"message": "Comment deleted successfully"}), 200
 
+
 # POST - Dar Like em Comentário
 @app.route('/comments/<int:comment_id>/like', methods=['POST'])
 @jwt_required()
@@ -208,6 +275,7 @@ def dislike_comment(comment_id):
     db.session.commit()
     return jsonify({"message": "Disliked comment successfully"})
 
+# ------------------ USERS ------------------
 # POST - Registrar Usuário
 @app.route('/register', methods=['POST'])
 def register():
@@ -294,6 +362,7 @@ def view_history(user_id):
     questions = Question.query.filter_by(user_id=user_id).all()
     return jsonify([{'title': q.title, 'description': q.description} for q in questions])
 
+
 # Função allowed_file e rota de upload de imagem de perfil
 def allowed_file(filename):
     return '.' in filename and \
@@ -320,10 +389,22 @@ def upload_file(user_id):
         user.profile_picture = relative_path
         db.session.commit()
         return jsonify({"message": "File uploaded successfully"}), 200
-        
+
+import os
+
+@app.route('/dbpath')
+def db_path():
+    db_uri = app.config['SQLALCHEMY_DATABASE_URI']
+    if db_uri.startswith('sqlite:///'):
+        db_path = db_uri.split('sqlite:///')[-1]
+        return os.path.abspath(db_path)
+    else:
+        return "O banco de dados não está usando SQLite."
+
+
+
 # MAIN PARA EXECUTAR O APP EM PYTHON
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     app.run(debug=True)
-   
