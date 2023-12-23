@@ -39,6 +39,8 @@ def db_path():
         return "O banco de dados não está usando SQLite."
 
 # ROTAS:
+
+# GET - Listar Comentários de uma Pergunta
 @app.route('/questions/<int:question_id>/comments', methods=['GET'])
 def get_comments(question_id):
     comments = Comment.query.filter_by(question_id=question_id).order_by((Comment.likes - Comment.dislikes).desc()).all()
@@ -52,9 +54,66 @@ def get_comments(question_id):
     ]
     return jsonify(comments_data)
 
+# POST - Adicionar Comentário
+@app.route('/questions/<int:question_id>/comments', methods=['POST'])
+@jwt_required()
+def add_comment(question_id):
+    comment_data = request.json
+    user_id = get_jwt_identity()
+    new_comment = Comment(content=comment_data['content'], question_id=question_id, user_id=user_id)
+    db.session.add(new_comment)
+    db.session.commit()
+    return jsonify({"message": "Comment added successfully"})
+
+# PUT - Atualizar Comentário
+@app.route('/comments/<int:comment_id>', methods=['PUT'])
+@jwt_required()
+def update_comment(comment_id):
+    current_user_id = get_jwt_identity()
+    comment = Comment.query.get(comment_id)
+    if not comment or comment.user_id != current_user_id:
+        return jsonify({"message": "Comment not found or unauthorized"}), 404
+    data = request.json
+    comment.content = data.get('content', comment.content)
+    db.session.commit()
+    return jsonify({"message": "Comment updated successfully"})
+
+# DELETE - Deletar Comentário
+@app.route('/comments/<int:comment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_comment(comment_id):
+    current_user_id = get_jwt_identity()
+    comment = Comment.query.get(comment_id)
+
+    if not comment:
+        return jsonify({"message": "Comment not found"}), 404
+
+    # Verifica se o usuário atual é o autor do comentário
+    if comment.user_id != current_user_id:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    db.session.delete(comment)
+    db.session.commit()
+    return jsonify({"message": "Comment deleted successfully"}), 200
+
+# POST - Dar Like em Comentário
+@app.route('/comments/<int:comment_id>/like', methods=['POST'])
+@jwt_required()
+def like_comment(comment_id):
+    current_user_id = get_jwt_identity()
+    existing_like = UserCommentLike.query.filter_by(user_id=current_user_id, comment_id=comment_id).first()
+    if existing_like:
+        return jsonify({"message": "Already liked/disliked this comment"}), 409
+    new_like = UserCommentLike(user_id=current_user_id, comment_id=comment_id, like=True)
+    db.session.add(new_like)
+    comment = Comment.query.get_or_404(comment_id)
+    comment.likes += 1
+    db.session.commit()
+    return jsonify({"message": "Liked comment successfully"})
+
+# POST - Dar Dislike em Comentário
 @app.route('/comments/<int:comment_id>/dislike', methods=['POST'])
 @jwt_required()
-
 def dislike_comment(comment_id):
     current_user_id = get_jwt_identity()
     existing_like = UserCommentLike.query.filter_by(user_id=current_user_id, comment_id=comment_id).first()
@@ -66,7 +125,7 @@ def dislike_comment(comment_id):
     comment.dislikes += 1
     db.session.commit()
     return jsonify({"message": "Disliked comment successfully"})
-    
+
 # MAIN PARA EXECUTAR O APP EM PYTHON
 if __name__ == '__main__':
     with app.app_context():
