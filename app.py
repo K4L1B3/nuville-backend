@@ -27,9 +27,6 @@ db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
 
-
-
-
 import os
 
 @app.route('/dbpath')
@@ -48,3 +45,34 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     app.run(debug=True)
+
+
+# ROTAS:
+@app.route('/questions/<int:question_id>/comments', methods=['GET'])
+def get_comments(question_id):
+    comments = Comment.query.filter_by(question_id=question_id).order_by((Comment.likes - Comment.dislikes).desc()).all()
+    comments_data = [
+        {
+            'content': c.content,
+            'author_name': c.author.name,
+            'author_profile_picture': c.author.profile_picture
+        }
+        for c in comments
+    ]
+    return jsonify(comments_data)
+
+@app.route('/comments/<int:comment_id>/dislike', methods=['POST'])
+@jwt_required()
+
+def dislike_comment(comment_id):
+    current_user_id = get_jwt_identity()
+    existing_like = UserCommentLike.query.filter_by(user_id=current_user_id, comment_id=comment_id).first()
+    if existing_like:
+        return jsonify({"message": "Already liked/disliked this comment"}), 409
+    new_like = UserCommentLike(user_id=current_user_id, comment_id=comment_id, like=False)
+    db.session.add(new_like)
+    comment = Comment.query.get_or_404(comment_id)
+    comment.dislikes += 1
+    db.session.commit()
+    return jsonify({"message": "Disliked comment successfully"})
+    
