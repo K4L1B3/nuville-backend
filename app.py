@@ -27,7 +27,80 @@ db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
 
+# GET - Listar Todas as Perguntas
+@app.route('/questions', methods=['GET'])
+def get_questions():
+    questions = Question.query.order_by((Question.likes - Question.dislikes).desc()).all()
+    questions_data = [
+        {
+            'title': q.title,
+            'description': q.description,
+            'author_name': q.author.name,
+            'author_profile_picture': q.author.profile_picture
+        }
+        for q in questions
+    ]
+    return jsonify(questions_data)
 
+# GET - Buscar Perguntas por Título
+@app.route('/questions/search', methods=['GET'])
+def search_questions():
+    title_query = request.args.get('title', '')
+    questions = Question.query.filter(Question.title.like(f'%{title_query}%')).order_by((Question.likes - Question.dislikes).desc()).all()
+    questions_data = [
+        {
+            'id': q.id,
+            'title': q.title,
+            'description': q.description,
+            'author_name': q.author.name,
+            'author_profile_picture': q.author.profile_picture
+        }
+        for q in questions
+    ]
+    return jsonify(questions_data)
+
+# POST - Adicionar Pergunta
+@app.route('/questions', methods=['POST'])
+@jwt_required()
+def add_question():
+    question_data = request.json
+    user_id = get_jwt_identity()
+    new_question = Question(title=question_data['title'], description=question_data['description'], user_id=user_id)
+    db.session.add(new_question)
+    db.session.commit()
+    return jsonify({"message": "Question added successfully"})
+
+# PUT - Atualizar Pergunta
+@app.route('/questions/<int:question_id>', methods=['PUT'])
+@jwt_required()
+def update_question(question_id):
+    current_user_id = get_jwt_identity()
+    question = Question.query.get(question_id)
+    if not question or question.user_id != current_user_id:
+        return jsonify({"message": "Question not found or unauthorized"}), 404
+    data = request.json
+    question.title = data.get('title', question.title)
+    question.description = data.get('description', question.description)
+    db.session.commit()
+    return jsonify({"message": "Question updated successfully"})
+
+# DELETE - Deletar Pergunta
+@app.route('/questions/<int:question_id>', methods=['DELETE'])
+@jwt_required()
+def delete_question(question_id):
+    current_user_id = get_jwt_identity()
+    question = Question.query.get(question_id)
+
+    if not question:
+        return jsonify({"message": "Question not found"}), 404
+
+    # Verifica se o usuário atual é o autor da pergunta
+    if question.user_id != current_user_id:
+        return jsonify({"message": "Unauthorized"}), 403
+
+    db.session.delete(question)
+    db.session.commit()
+    return jsonify({"message": "Question deleted successfully"}), 200
 
 
 import os
