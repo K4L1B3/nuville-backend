@@ -178,6 +178,119 @@ def dislike_comment(comment_id):
     db.session.commit()
     return jsonify({"message": "Disliked comment successfully"})
 
+# POST - Registrar Usuário
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.json
+    if data['password'] != data['confirm_password']:
+        return jsonify({"message": "Passwords do not match"}), 400
+    new_user = User(email=data['email'], name=data['name'], age=data['age'], profile_picture='default_profile_url')
+    new_user.set_password(data['password'])
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({"message": "User registered successfully"}), 201
+
+# POST - Login do Usuário
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.json
+    user = User.query.filter_by(email=data['email']).first()
+    if user and user.check_password(data['password']):
+        access_token = create_access_token(identity=user.id)
+        return jsonify(access_token=access_token), 200
+    return jsonify({"message": "Invalid credentials"}), 401
+
+# PUT - Atualizar Usuário
+@app.route('/user/<int:user_id>', methods=['PUT'])
+@jwt_required()
+def update_user(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+    data = request.json
+    user.name = data.get('name', user.name)
+    user.age = data.get('age', user.age)
+    if 'password' in data:
+        user.set_password(data['password'])
+    db.session.commit()
+    return jsonify({"message": "User updated successfully"}), 200
+
+# GET - Visualizar Bookmarks do Usuário
+@app.route('/user/<int:user_id>/bookmarks', methods=['GET'])
+@jwt_required()
+def view_bookmarks(user_id):
+    current_user_id = get_jwt_identity()
+    if current_user_id != user_id:
+        return jsonify({"message": "Unauthorized access"}), 403
+    bookmarks = Bookmark.query.filter_by(user_id=user_id).all()
+    bookmarked_questions = [Question.query.get(bm.question_id) for bm in bookmarks]
+    bookmarked_questions_data = [
+        {
+            'question_id': q.id,
+            'title': q.title,
+            'description': q.description
+        }
+        for q in bookmarked_questions if q is not None
+    ]
+    return jsonify(bookmarked_questions_data)
+
+# POST - Adicionar Bookmark
+@app.route('/user/<int:user_id>/bookmark/<int:question_id>', methods=['POST'])
+@jwt_required()
+def add_bookmark(user_id, question_id):
+    new_bookmark = Bookmark(user_id=user_id, question_id=question_id)
+    db.session.add(new_bookmark)
+    db.session.commit()
+    return jsonify({"message": "Bookmark added successfully"}), 201
+
+# DELETE - Remover Bookmark
+@app.route('/user/<int:user_id>/bookmark/<int:question_id>', methods=['DELETE'])
+@jwt_required()
+def remove_bookmark(user_id, question_id):
+    bookmark = Bookmark.query.filter_by(user_id=user_id, question_id=question_id).first()
+    if bookmark:
+        db.session.delete(bookmark)
+        db.session.commit()
+        return jsonify({"message": "Bookmark removed successfully"}), 200
+    return jsonify({"message": "Bookmark not found"}), 404
+
+# GET - Visualizar Histórico de Perguntas do Usuário
+@app.route('/user/<int:user_id>/history', methods=['GET'])
+@jwt_required()
+def view_history(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+    questions = Question.query.filter_by(user_id=user_id).all()
+    return jsonify([{'title': q.title, 'description': q.description} for q in questions])
+
+# Função allowed_file e rota de upload de imagem de perfil
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@app.route('/upload/<int:user_id>', methods=['POST'])
+@jwt_required()
+def upload_file(user_id):
+    if 'file' not in request.files:
+        return jsonify({"message": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"message": "No selected file"}), 400
+    if file and allowed_file(file.filename):
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        relative_path = os.path.join('users-profiles', filename)  # Salva caminho relativo
+
+        user = User.query.get(user_id)
+        if not user:
+            return jsonify({"message": "User not found"}), 404
+        
+        user.profile_picture = relative_path
+        db.session.commit()
+        return jsonify({"message": "File uploaded successfully"}), 200
+        
 # MAIN PARA EXECUTAR O APP EM PYTHON
 if __name__ == '__main__':
     with app.app_context():
