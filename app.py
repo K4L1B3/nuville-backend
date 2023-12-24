@@ -26,6 +26,8 @@ ns = api.namespace('main', description='Operações principais')
 db = SQLAlchemy(app)
 jwt = JWTManager(app)
 
+with app.app_context():
+        db.create_all()
 
 
 # Modelos
@@ -405,6 +407,4 @@ def db_path():
 
 # MAIN PARA EXECUTAR O APP EM PYTHON
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(debug=False)
