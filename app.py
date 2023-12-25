@@ -7,6 +7,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import timedelta
 import os
 from werkzeug.utils import secure_filename
+from flask_cors import CORS
+
 
 UPLOAD_FOLDER = './users-profiles'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
@@ -14,6 +16,8 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 load_dotenv('./.env')
 
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "*"}})
+
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'fallback_secret_key')  # Carregar da variável de ambiente
@@ -117,14 +121,30 @@ def search_questions():
 
 # POST - Adicionar Pergunta
 @app.route('/questions', methods=['POST'])
-@jwt_required()
+@jwt_required(optional=True)
 def add_question():
     question_data = request.json
     user_id = get_jwt_identity()
-    new_question = Question(title=question_data['title'], description=question_data['description'], user_id=user_id)
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found"}), 404
+    
+    new_question = Question(
+        title=question_data['title'],
+        description=question_data['description'],
+        user_id=user_id
+    )
     db.session.add(new_question)
     db.session.commit()
-    return jsonify({"message": "Question added successfully"})
+
+    # Agora, retorne os dados da nova pergunta, incluindo o nome do autor e a imagem de perfil
+    return jsonify({
+        'id': new_question.id,
+        'title': new_question.title,
+        'description': new_question.description,
+        'author_name': user.name,
+        'author_profile_picture': user.profile_picture if user.profile_picture else 'default_profile_url'
+    }), 201
 
 # PUT - Atualizar Pergunta
 @app.route('/questions/<int:question_id>', methods=['PUT'])
@@ -407,4 +427,4 @@ def db_path():
 
 # MAIN PARA EXECUTAR O APP EM PYTHON
 if __name__ == '__main__':
-    app.run(debug=False)
+    app.run(debug=True)
